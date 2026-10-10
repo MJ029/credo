@@ -296,8 +296,17 @@ Every pull request into `master` must pass the **CI gate** status check before i
 | Workflow security | actionlint and zizmor | Script injection, unpinned actions, excessive token permissions |
 | Personal data guard | `.github/scripts/check-personal-data.sh` | `/Users/<name>` paths, personal email addresses, commits not made with a GitHub noreply address |
 
-Third-party actions are pinned to commit SHAs and downloaded tools are checksum-verified;
-Dependabot proposes updates weekly. To lint locally:
+A second workflow, `.github/workflows/dependency-security.yml`, checks third-party libraries and
+adds the **Dependency gate** check, also required on every pull request:
+
+| Check | Tool | Catches |
+|---|---|---|
+| Dependency review | GitHub dependency review, fails on moderate or worse | A PR that adds or bumps a library to a version with a known vulnerability |
+| Vulnerability scan | OSV-Scanner, also run weekly | Known CVEs in the libraries already in `Package.resolved`, including ones published after they were added |
+
+Credo has no third-party Swift dependencies today, so these pass trivially; they guard any
+package added later. Third-party actions are pinned to commit SHAs and downloaded tools are
+checksum-verified; Dependabot proposes updates weekly, waiting 7 days after a release. To lint locally:
 
 ```bash
 swiftlint lint --strict --baseline .swiftlint.baseline.json
