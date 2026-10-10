@@ -1,0 +1,60 @@
+# SwiftLint configuration. CI runs `swiftlint lint --strict` with a baseline, so existing
+# findings are tolerated and any NEW finding fails the pull request.
+included:
+  - Sources
+
+excluded:
+  - .build
+
+# Rules that catch real smells but are off by default.
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - first_where
+  - contains_over_first_not_nil
+  - sorted_first_last
+  - reduce_into
+  - redundant_nil_coalescing
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - overridden_super_call
+  - fatal_error_message
+  - discouraged_optional_boolean
+  - toggle_bool
+
+# Security-relevant: forced casts and forced try crash on malformed input (the app parses
+# untrusted log files), so keep them as errors.
+force_cast: error
+force_try: error
+
+line_length:
+  warning: 140
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
+
+# Short names such as r, p, id, ts and i are idiomatic in tight loops over records.
+identifier_name:
+  min_length:
+    warning: 1
+  max_length:
+    warning: 50
+  excluded: [id, x, y, r, p, s, d, a, b, i, ts, to]
+
+function_body_length:
+  warning: 80
+  error: 150
+file_length:
+  warning: 500
+  error: 900
+type_body_length:
+  warning: 350
+  error: 600
+cyclomatic_complexity:
+  warning: 12
+  error: 25
+nesting:
+  type_level: 3
+large_tuple:
+  warning: 4
+  error: 6

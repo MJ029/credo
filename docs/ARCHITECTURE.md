@@ -79,6 +79,13 @@ JSONL logs ──► UsageEngine ──► [UsageRecord] ──► Aggregator �
 SwiftUI's `@State` is avoided on purpose. It relies on a compiler plugin that ships with full
 Xcode but not the Command Line Tools, so view state lives in small `ObservableObject` classes.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request into `master` and on pushes to it: build,
+SwiftLint, gitleaks, Semgrep, actionlint and zizmor, and a personal data guard. A final **CI gate**
+job passes only when all of them pass, and branch protection requires it. It does not build the
+installers; `build.sh` does that locally. See [Contributing and CI](../README.md#contributing-and-ci).
+
 ## Adding another tool
 
 To count another assistant (for example Codex or a Google tool):

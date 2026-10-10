@@ -282,6 +282,30 @@ everything). Or from a copy of this repository:
 
 Or quit Credo from its popover and drag `/Applications/Credo.app` to the Trash.
 
+## Contributing and CI
+
+Every pull request into `master` must pass the **CI gate** status check before it can merge
+(`.github/workflows/ci.yml`):
+
+| Check | Tool | Catches |
+|---|---|---|
+| Build (Swift) | `swift build -c release`, warnings as errors | Compile errors and new compiler warnings |
+| Code smells | SwiftLint 0.65.1, strict | Force casts and `try!`, long functions and files, complexity, style. Existing findings sit in `.swiftlint.baseline.json`; **new** findings fail |
+| Secret scan | gitleaks, full history | Committed tokens, keys and passwords |
+| SAST | Semgrep (default, secrets and Swift rule packs) | Insecure code patterns |
+| Workflow security | actionlint and zizmor | Script injection, unpinned actions, excessive token permissions |
+| Personal data guard | `.github/scripts/check-personal-data.sh` | `/Users/<name>` paths, personal email addresses, commits not made with a GitHub noreply address |
+
+Third-party actions are pinned to commit SHAs and downloaded tools are checksum-verified;
+Dependabot proposes updates weekly. To lint locally:
+
+```bash
+swiftlint lint --strict --baseline .swiftlint.baseline.json
+```
+
+Commit with your GitHub noreply address (`git config user.email "<id>+<username>@users.noreply.github.com"`)
+so the personal data guard passes and your real email stays out of history.
+
 ## Documentation
 
 - [How Credo counts](docs/HOW-IT-COUNTS.md): de-duplication rules, tool labels, cost and cache savings

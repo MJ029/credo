@@ -1,0 +1,4 @@
+# Changes to the pipeline itself need the owner's review.
+* @MJ029
+/.github/ @MJ029
+.swiftlint.yml @MJ029
