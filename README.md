@@ -269,6 +269,26 @@ or Max plan you aren't billed per token, so read it as the value of what you use
   never prompt or response text) in `~/Library/Application Support/Credo/history-v2.tsv`.
 - Delete that folder, or run `./uninstall.sh --all`, to remove everything.
 
+### Security notes for Sync with Claude account
+
+Sync is optional and off by default. Know what you are trusting before you turn it on:
+
+- **What Credo handles.** Claude Code's sign-in token, a credential for your Claude account.
+  The Keychain entry also holds a refresh token. Credo reads the whole entry into memory, uses
+  only the access token, and never sends, stores or logs any of it. It overwrites the raw bytes
+  after parsing, but Swift strings can't be wiped, so the access token stays in memory until the
+  request finishes.
+- **Where it goes.** One hardcoded address, `https://api.anthropic.com/api/oauth/usage`, over
+  HTTPS, in a session with no cache or cookies. Credo refuses HTTP redirects, so the token can't
+  be forwarded to another host. Only the two percentages and reset times in the reply are kept.
+- **What it can't protect against.** A tampered Credo build could misuse the token, so download
+  releases from this repository's Releases page and check the checksum or build provenance
+  (see [Releasing](#releasing)), or build from source. Any program running as you can already read the
+  same Keychain item with `security`, so Credo doesn't widen that.
+- **It's unofficial.** The usage address is undocumented and Anthropic can change or block it.
+  Check Anthropic's current terms for third-party apps that use Claude Code's sign-in before you
+  rely on it. Turn Sync off at any time and Credo goes back to its local logs.
+
 ## Uninstall
 
 Run the Credo installer, untick **Install Credo** on the Installation Type step, and keep
