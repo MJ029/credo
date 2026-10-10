@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.2.3
+
+- Sync with Claude account hardening: Credo now refuses HTTP redirects, so the sign-in can only
+  be sent to `api.anthropic.com`, and overwrites the raw Keychain bytes after reading them.
+- README: new "Security notes" for Sync with Claude account.
+- Release workflow and installer files are now part of the repository.
+
 ## 2.2.2
 
 - The 5-hour window starts at the minute of the first response after the previous window ended

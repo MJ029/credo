@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 APP_NAME="Credo"
 BUNDLE_ID="app.credo.macos"
-VERSION="2.2.2"
+VERSION="2.2.3"
 BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 OPEN_INSTALLER=1
 [[ "${1:-}" == "--no-open" ]] && OPEN_INSTALLER=0

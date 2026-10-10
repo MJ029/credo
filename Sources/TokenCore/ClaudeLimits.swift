@@ -90,7 +90,10 @@ public enum ClaudeLimitsClient {
     /// Claude Code keeps its sign-in in the login Keychain on macOS, or in
     /// `.credentials.json` in its config folder on other setups.
     static func readCredentials() -> Credentials? {
-        if let data = keychainData(), let c = parseCredentials(data) { return c }
+        if var data = keychainData() {
+            defer { wipe(&data) }
+            if let c = parseCredentials(data) { return c }
+        }
         let fm = FileManager.default
         var dirs: [URL] = []
         if let custom = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"], !custom.isEmpty {
@@ -100,12 +103,19 @@ public enum ClaudeLimitsClient {
         dirs.append(home.appendingPathComponent(".claude"))
         dirs.append(home.appendingPathComponent(".config/claude"))
         for dir in dirs {
-            if let data = try? Data(contentsOf: dir.appendingPathComponent(".credentials.json")),
-               let c = parseCredentials(data) {
-                return c
-            }
+            guard var data = try? Data(contentsOf: dir.appendingPathComponent(".credentials.json")) else { continue }
+            defer { wipe(&data) }
+            if let c = parseCredentials(data) { return c }
         }
         return nil
+    }
+
+    /// Best-effort: overwrite a buffer that held the sign-in so it doesn't linger in memory.
+    /// Swift Strings are immutable copies and can't be wiped, so the parsed token itself lives
+    /// until the request finishes. This only shortens how long the raw Keychain/JSON bytes
+    /// (which also contain Claude Code's refresh token) stay around.
+    static func wipe(_ data: inout Data) {
+        data.resetBytes(in: 0..<data.count)
     }
 
     /// Asks macOS's own `security` tool for the item. Claude Code saves its sign-in with that
@@ -120,12 +130,13 @@ public enum ClaudeLimitsClient {
         p.standardOutput = out
         p.standardError = Pipe()
         do { try p.run() } catch { return nil }
-        let data = out.fileHandleForReading.readDataToEndOfFile()
+        var data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        guard p.terminationStatus == 0 else { return nil }
-        // `-w` prints the secret followed by a newline.
-        let trimmed = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : Data(trimmed.utf8)
+        guard p.terminationStatus == 0 else { wipe(&data); return nil }
+        // `-w` prints the secret followed by a newline. Trim it on the bytes, not via a String,
+        // so no extra copy of the secret is made.
+        while let last = data.last, last == 0x0A || last == 0x0D || last == 0x20 { data.removeLast() }
+        return data.isEmpty ? nil : data
     }
 
     static func parseCredentials(_ data: Data) -> Credentials? {
@@ -181,14 +192,31 @@ public enum ClaudeLimitsClient {
 
     // MARK: Fetch
 
+    /// Refuses every HTTP redirect, so the sign-in can only ever reach the one hardcoded host.
+    /// A redirect then shows up as an HTTP 3xx error and Credo falls back to its logs.
+    final class RedirectBlocker: NSObject, URLSessionTaskDelegate, Sendable {
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest,
+                        completionHandler: @escaping (URLRequest?) -> Void) {
+            completionHandler(nil)
+        }
+    }
+
     public static func fetch(now: Date = Date(), timeout: TimeInterval = 15,
                              completion: @escaping @Sendable (Result<ClaudeLimits, LimitsError>) -> Void) {
         guard let creds = readCredentials() else { return completion(.failure(.notSignedIn)) }
         if let exp = creds.expiresAt, exp <= now { return completion(.failure(.expired)) }
+        get(endpoint, token: creds.token, timeout: timeout, completion: completion)
+    }
 
-        var req = URLRequest(url: endpoint, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
+    /// One authenticated GET. `url` is a parameter only so tests can point it at a local server;
+    /// production code always passes `endpoint`.
+    static func get(_ url: URL, token: String, timeout: TimeInterval = 15,
+                    completion: @escaping @Sendable (Result<ClaudeLimits, LimitsError>) -> Void) {
+        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
         req.httpMethod = "GET"
-        req.setValue("Bearer \(creds.token)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("Credo", forHTTPHeaderField: "User-Agent")
@@ -196,7 +224,7 @@ public enum ClaudeLimitsClient {
         let config = URLSessionConfiguration.ephemeral
         config.urlCache = nil
         config.httpCookieStorage = nil
-        let session = URLSession(configuration: config)
+        let session = URLSession(configuration: config, delegate: RedirectBlocker(), delegateQueue: nil)
         session.dataTask(with: req) { data, response, error in
             defer { session.finishTasksAndInvalidate() }
             if let error { return completion(.failure(.network(error.localizedDescription))) }
