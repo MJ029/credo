@@ -28,6 +28,17 @@ jobs:
       - name: Compile release build, warnings as errors
         run: swift build -c release -Xswiftc -warnings-as-errors
 
+  package:
+    name: Package (installers)
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the .pkg and .dmg exactly as a release does (catches a broken build.sh early)
+        run: ./build.sh --no-open
+
   swiftlint:
     name: Code smells (SwiftLint)
     runs-on: macos-15
@@ -131,7 +142,7 @@ jobs:
   gate:
     name: CI gate
     if: always()
-    needs: [build, swiftlint, secrets, sast, workflows, personal-data]
+    needs: [build, package, swiftlint, secrets, sast, workflows, personal-data]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:

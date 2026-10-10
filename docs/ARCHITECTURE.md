@@ -85,7 +85,9 @@ Xcode but not the Command Line Tools, so view state lives in small `ObservableOb
 SwiftLint, gitleaks, Semgrep, actionlint and zizmor, and a personal data guard. A final **CI gate**
 job passes only when all of them pass. `.github/workflows/dependency-security.yml` adds dependency
 review and an OSV vulnerability scan behind a **Dependency gate** job. Branch protection requires
-both gates. CI does not build the installers; `build.sh` does that locally. See [Contributing and CI](../README.md#contributing-and-ci).
+both gates. CI runs `build.sh --no-open` as a smoke test on every pull request.
+`.github/workflows/release.yml` runs on version tags: it builds the installers on a clean runner
+and publishes them only after the owner approves the `release` environment. See [Contributing and CI](../README.md#contributing-and-ci).
 
 ## Adding another tool
 

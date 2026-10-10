@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Credo installer. build.sh fills in __VERSION__ and __ARCH__. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Credo __VERSION__</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <!-- Show the choices on their own step so a clean install is one click. -->
+    <options customize="always" require-scripts="false" rootVolumeOnly="true" hostArchitectures="__ARCH__"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="13.0"/>
+        </allowed-os-versions>
+    </volume-check>
+
+    <!-- Installed in this order: clean up, then erase (optional), then the new app. -->
+    <choices-outline>
+        <line choice="cleanup"/>
+        <line choice="erase"/>
+        <line choice="app"/>
+    </choices-outline>
+
+    <choice id="cleanup" title="Remove previous versions first"
+            description="Quits and removes any earlier Credo or TokenMeter app before installing, for a clean install. Your saved history and settings are kept unless you also tick the next option."
+            start_selected="true">
+        <pkg-ref id="app.credo.macos.cleanup"/>
+    </choice>
+    <choice id="erase" title="Also erase saved history and settings"
+            description="Deletes Credo's saved history, pricing file, preferences and widget positions, so Credo starts fresh and rebuilds its totals from the Claude logs still on this Mac."
+            start_selected="false">
+        <pkg-ref id="app.credo.macos.erase"/>
+    </choice>
+    <choice id="app" title="Install Credo __VERSION__"
+            description="Installs Credo in /Applications and opens it. Untick this and keep the options above ticked to uninstall Credo without installing it again."
+            start_selected="true">
+        <pkg-ref id="app.credo.macos"/>
+    </choice>
+
+    <pkg-ref id="app.credo.macos.cleanup" version="__VERSION__">Credo-cleanup.pkg</pkg-ref>
+    <pkg-ref id="app.credo.macos.erase" version="__VERSION__">Credo-erase.pkg</pkg-ref>
+    <pkg-ref id="app.credo.macos" version="__VERSION__">Credo-app.pkg</pkg-ref>
+</installer-gui-script>

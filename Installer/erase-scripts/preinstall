@@ -1,0 +1,26 @@
+#!/bin/bash
+# "Also erase saved history and settings": delete Credo's (and TokenMeter's) saved history,
+# pricing file, preferences and widget positions for the logged-in user.
+CONSOLE_USER="$(/usr/bin/stat -f%Su /dev/console)"
+[[ -z "$CONSOLE_USER" || "$CONSOLE_USER" == "root" ]] && exit 0
+USER_HOME="$(/usr/bin/dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | /usr/bin/awk '{print $2}')"
+[[ -z "$USER_HOME" || ! -d "$USER_HOME" ]] && exit 0
+
+/usr/bin/pkill -x Credo 2>/dev/null || true
+/usr/bin/pkill -x TokenMeter 2>/dev/null || true
+
+for dir in "Credo" "TokenMeter"; do
+    target="$USER_HOME/Library/Application Support/$dir"
+    if [[ -d "$target" ]]; then
+        echo "Credo clean install: erasing $target"
+        /bin/rm -rf "$target"
+    fi
+done
+
+as_user() { /usr/bin/sudo -u "$CONSOLE_USER" "$@"; }
+DOMAINS="app.credo.macos $(as_user /usr/bin/defaults domains 2>/dev/null | /usr/bin/tr ',' '\n' | /usr/bin/grep -i tokenmeter | /usr/bin/tr -d ' ')"
+for domain in $DOMAINS; do
+    as_user /usr/bin/defaults delete "$domain" >/dev/null 2>&1 || true
+    /bin/rm -f "$USER_HOME/Library/Preferences/$domain.plist"
+done
+exit 0

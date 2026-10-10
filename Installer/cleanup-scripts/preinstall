@@ -1,0 +1,29 @@
+#!/bin/bash
+# "Remove previous versions first": quit and remove earlier copies of Credo and of TokenMeter
+# (Credo's name before 2.0), and forget their install receipts. Saved history and settings stay.
+CONSOLE_USER="$(/usr/bin/stat -f%Su /dev/console)"
+USER_HOME=""
+if [[ -n "$CONSOLE_USER" && "$CONSOLE_USER" != "root" ]]; then
+    USER_HOME="$(/usr/bin/dscl . -read "/Users/$CONSOLE_USER" NFSHomeDirectory 2>/dev/null | /usr/bin/awk '{print $2}')"
+fi
+
+for name in Credo TokenMeter; do
+    /usr/bin/pkill -x "$name" 2>/dev/null || true
+done
+sleep 1
+
+APPS=("/Applications/Credo.app" "/Applications/TokenMeter.app")
+if [[ -n "$USER_HOME" ]]; then
+    APPS+=("$USER_HOME/Applications/Credo.app" "$USER_HOME/Applications/TokenMeter.app")
+fi
+for app in "${APPS[@]}"; do
+    if [[ -d "$app" ]]; then
+        echo "Credo clean install: removing $app"
+        /bin/rm -rf "$app"
+    fi
+done
+
+/usr/sbin/pkgutil --pkgs | /usr/bin/grep -iE '^app\.credo\.|tokenmeter' | while read -r id; do
+    /usr/sbin/pkgutil --forget "$id" >/dev/null 2>&1 || true
+done
+exit 0
