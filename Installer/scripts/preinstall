@@ -1,0 +1,4 @@
+#!/bin/bash
+# Quit a running copy so the new version can replace it.
+/usr/bin/pkill -x Credo 2>/dev/null || true
+exit 0

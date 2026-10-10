@@ -1,0 +1,73 @@
+name: Dependency security
+
+# Checks third-party libraries for known vulnerabilities and bad licenses.
+#  - on pull requests: blocks PRs that ADD or BUMP a dependency to a vulnerable version
+#  - on every run (also weekly): scans lockfiles against the OSV vulnerability database, so a
+#    CVE published tomorrow for a library you already use still turns the scan red
+# Credo currently has no third-party Swift dependencies, so both checks pass trivially today;
+# they start guarding the moment a package is added to Package.swift / Package.resolved.
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: never
+
+  osv-scan:
+    name: Vulnerability scan (OSV)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install OSV-Scanner 2.6.0 (checksum verified)
+        run: |
+          curl -fsSL -o osv-scanner \
+            https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+          echo "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  osv-scanner" \
+            | sha256sum -c -
+          install -m 0755 osv-scanner "$RUNNER_TEMP/osv-scanner"
+      - name: Scan lockfiles and manifests for known vulnerabilities
+        run: '"$RUNNER_TEMP/osv-scanner" scan source --recursive --allow-no-lockfiles .'
+
+  gate:
+    name: Dependency gate
+    if: always()
+    needs: [dependency-review, osv-scan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Fail unless the dependency checks succeeded
+        env:
+          REVIEW: ${{ needs.dependency-review.result }}
+          OSV: ${{ needs.osv-scan.result }}
+        run: |
+          echo "dependency-review=$REVIEW osv-scan=$OSV"
+          # dependency-review only runs on pull requests, so "skipped" is fine for it alone.
+          { [ "$REVIEW" = "success" ] || [ "$REVIEW" = "skipped" ]; } || { echo "::error::dependency review failed"; exit 1; }
+          [ "$OSV" = "success" ] || { echo "::error::OSV scan failed"; exit 1; }

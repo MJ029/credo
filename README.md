@@ -282,6 +282,56 @@ everything). Or from a copy of this repository:
 
 Or quit Credo from its popover and drag `/Applications/Credo.app` to the Trash.
 
+## Contributing and CI
+
+Every pull request into `master` must pass the **CI gate** status check before it can merge
+(`.github/workflows/ci.yml`):
+
+| Check | Tool | Catches |
+|---|---|---|
+| Build (Swift) | `swift build -c release`, warnings as errors | Compile errors and new compiler warnings |
+| Package (installers) | `build.sh --no-open` | A broken installer build, found before release day |
+| Code smells | SwiftLint 0.65.1, strict | Force casts and `try!`, long functions and files, complexity, style. Existing findings sit in `.swiftlint.baseline.json`; **new** findings fail |
+| Secret scan | gitleaks, full history | Committed tokens, keys and passwords |
+| SAST | Semgrep (default, secrets and Swift rule packs) | Insecure code patterns |
+| Workflow security | actionlint and zizmor | Script injection, unpinned actions, excessive token permissions |
+| Personal data guard | `.github/scripts/check-personal-data.sh` | `/Users/<name>` paths, personal email addresses, commits not made with a GitHub noreply address |
+
+A second workflow, `.github/workflows/dependency-security.yml`, checks third-party libraries and
+adds the **Dependency gate** check, also required on every pull request:
+
+| Check | Tool | Catches |
+|---|---|---|
+| Dependency review | GitHub dependency review, fails on moderate or worse | A PR that adds or bumps a library to a version with a known vulnerability |
+| Vulnerability scan | OSV-Scanner, also run weekly | Known CVEs in the libraries already in `Package.resolved`, including ones published after they were added |
+
+Credo has no third-party Swift dependencies today, so these pass trivially; they guard any
+package added later. Third-party actions are pinned to commit SHAs and downloaded tools are
+checksum-verified; Dependabot proposes updates weekly, waiting 7 days after a release. To lint locally:
+
+```bash
+swiftlint lint --strict --baseline .swiftlint.baseline.json
+```
+
+Commit with your GitHub noreply address (`git config user.email "<id>+<username>@users.noreply.github.com"`)
+so the personal data guard passes and your real email stays out of history.
+
+## Releasing
+
+Releases are built on GitHub's runners, never on a developer's Mac, and nothing is published
+until the repository owner approves it.
+
+1. Bump `VERSION` in `build.sh` and add a `## x.y.z` section to `CHANGELOG.md`, in a pull request.
+2. After it merges, tag `master`: `git tag vx.y.z && git push origin vx.y.z`.
+3. The **Release** workflow checks that the tag is on `master` and matches `build.sh` and the
+   changelog, builds `Credo-x.y.z.pkg` and `.dmg`, and then **waits for the owner's approval** in
+   the `release` environment.
+4. On approval it signs build provenance and publishes a GitHub Release with the installers,
+   `SHA256SUMS.txt` and the changelog notes.
+
+To check a download: `shasum -a 256 -c SHA256SUMS.txt`, or verify its provenance with
+`gh attestation verify Credo-x.y.z.pkg --repo <owner>/credo`.
+
 ## Documentation
 
 - [How Credo counts](docs/HOW-IT-COUNTS.md): de-duplication rules, tool labels, cost and cache savings
