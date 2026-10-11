@@ -23,6 +23,142 @@ Sources/
     Formatting.swift    number formatting, palette, menu bar text, widget kinds
 ```
 
+## Diagrams
+
+GitHub draws these from the Mermaid source below each heading.
+
+### System context
+
+What Credo touches. Everything is on your Mac except the one optional request.
+
+```mermaid
+flowchart LR
+    subgraph Mac["Your Mac"]
+        direction LR
+        subgraph Logs["Claude logs (read only)"]
+            CC["Claude Code<br/>~/.claude/projects"]
+            CD["Claude Desktop agent sessions<br/>~/Library/Application Support/Claude"]
+            EX["Folders you add<br/>Settings → Data sources"]
+        end
+        KC[("Keychain<br/>Claude Code-credentials")]
+        subgraph App["Credo.app"]
+            direction TB
+            TC["TokenCore<br/>read · de-duplicate · price · aggregate"]
+            UI["Credo UI<br/>menu bar · popover · widgets · settings"]
+            TC --> UI
+        end
+        SUP[("~/Library/Application Support/Credo<br/>history-v2.tsv · pricing.json")]
+    end
+    API["api.anthropic.com<br/>/api/oauth/usage"]
+
+    CC --> TC
+    CD --> TC
+    EX --> TC
+    TC <--> SUP
+    KC -. "optional: Sync with Claude account<br/>via /usr/bin/security" .-> TC
+    TC -. "GET every 3 min, no redirects" .-> API
+```
+
+### Components
+
+How the two targets fit together. `TokenCore` imports only Foundation and knows nothing about
+the UI; `Credo` owns all SwiftUI and AppKit code.
+
+```mermaid
+flowchart TB
+    subgraph Credo["Credo target (SwiftUI + AppKit)"]
+        App["CredoApp<br/>MenuBarExtra · --report · --limits"]
+        Store["UsageStore<br/>refresh timer · preferences · menu bar text"]
+        Pop["PopoverView"]
+        WM["WindowManager<br/>widget panels · settings window"]
+        Wid["WidgetViews<br/>six widgets"]
+        Set["SettingsView"]
+        Cmp["Components · Formatting"]
+        Leg["LegacyCleanup"]
+    end
+    subgraph Core["TokenCore target (Foundation only)"]
+        Eng["UsageEngine<br/>scan · incremental read · history"]
+        Price["Pricing<br/>price table · cost · cache savings"]
+        Agg["Aggregator<br/>periods × tool filters · 5-hour window"]
+        Sum["Summary · Models<br/>UsageRecord · UsageSnapshot"]
+        Lim["ClaudeLimits<br/>ClaudeLimitsClient · WindowOverride"]
+    end
+
+    App --> Store
+    App --> WM
+    App --> Leg
+    Store -->|"refresh(extraFolders, window)"| Eng
+    Store -->|"fetch() every 3 min"| Lim
+    Lim -->|"WindowOverride"| Store
+    Eng --> Price
+    Eng --> Agg
+    Eng --> Sum
+    Agg --> Sum
+    Store -->|"@Published snapshot"| Pop
+    Store --> Wid
+    Store --> Set
+    WM --> Wid
+    WM --> Set
+    Pop --> Cmp
+    Wid --> Cmp
+```
+
+### Refresh cycle
+
+What happens each refresh interval (one minute by default).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T as Timer
+    participant S as UsageStore
+    participant E as UsageEngine
+    participant F as Log files
+    participant H as history-v2.tsv
+    participant A as Aggregator
+    participant V as Views
+
+    T->>S: tick
+    S->>E: refresh(extraFolders, window)
+    E->>F: walk folders, read bytes added since last pass
+    F-->>E: new JSONL lines
+    E->>E: skip lines without "usage", parse, price
+    E->>E: keep one record per message ID
+    E->>H: append new records
+    E->>A: snapshot(records, window)
+    A-->>E: UsageSnapshot (all periods × tool filters)
+    E-->>S: snapshot (cached copy if nothing changed)
+    S-->>V: publish, views redraw
+```
+
+### Sync with Claude account (optional)
+
+Off by default. When on, it only decides where the 5-hour window starts and what percentage is
+shown; token totals still come from the local logs.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as UsageStore
+    participant L as ClaudeLimitsClient
+    participant K as Keychain (security tool)
+    participant API as api.anthropic.com
+
+    S->>L: fetch() every 3 minutes
+    L->>K: find-generic-password "Claude Code-credentials"
+    K-->>L: sign-in JSON (access + refresh token)
+    L->>L: parse access token, wipe raw bytes
+    alt token expired or missing
+        L-->>S: LimitsError (notSignedIn / expired)
+    else token usable
+        L->>API: GET /api/oauth/usage (HTTPS, redirects refused)
+        API-->>L: five_hour and seven_day utilization + resets_at
+        L-->>S: ClaudeLimits
+        S->>S: WindowOverride (start time or no window)
+    end
+    Note over S: On any error Credo falls back to its logs
+```
+
 ## Data flow
 
 ```
