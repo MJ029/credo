@@ -86,8 +86,9 @@ SwiftLint, gitleaks, Semgrep, actionlint and zizmor, and a personal data guard. 
 job passes only when all of them pass. `.github/workflows/dependency-security.yml` adds dependency
 review and an OSV vulnerability scan behind a **Dependency gate** job. Branch protection requires
 both gates. CI runs `build.sh --no-open` as a smoke test on every pull request.
-`.github/workflows/release.yml` runs on version tags: it builds the installers on a clean runner
-and publishes them only after the owner approves the `release` environment. See [Contributing and CI](../README.md#contributing-and-ci).
+`.github/workflows/release.yml` runs on every push to `master`: if `VERSION` in `build.sh` has no
+release yet, it builds the installers on a clean runner, waits for the owner to approve the
+`release` environment, then creates the tag and the GitHub Release together.
 
 ## Adding another tool
 

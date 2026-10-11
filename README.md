@@ -341,16 +341,16 @@ so the personal data guard passes and your real email stays out of history.
 Releases are built on GitHub's runners, never on a developer's Mac, and nothing is published
 until the repository owner approves it.
 
-1. Bump `VERSION` in `build.sh` and add a `## x.y.z` section to `CHANGELOG.md`, in a pull request.
-2. After it merges, tag `master`: `git tag vx.y.z && git push origin vx.y.z`.
-3. The **Release** workflow checks that the tag is on `master` and matches `build.sh` and the
-   changelog, builds `Credo-x.y.z.pkg` and `.dmg`, and then **waits for the owner's approval** in
-   the `release` environment.
-4. On approval it signs build provenance and publishes a GitHub Release with the installers,
-   `SHA256SUMS.txt` and the changelog notes.
+1. In a pull request, bump `VERSION` in `build.sh` and add a `## x.y.z` section to `CHANGELOG.md`.
+2. Merge it. The **Release** workflow sees that `vx.y.z` has no release yet and builds
+   `Credo-x.y.z.pkg` and `.dmg`. Merges that don't change `VERSION` do nothing.
+3. It then **waits for the owner's approval** in the `release` environment (Actions tab, open the
+   run, **Review deployments**).
+4. On approval it signs build provenance and creates the tag `vx.y.z` and a GitHub Release with the
+   installers, `SHA256SUMS.txt` and the changelog notes.
 
-To check a download: `shasum -a 256 -c SHA256SUMS.txt`, or verify its provenance with
-`gh attestation verify Credo-x.y.z.pkg --repo <owner>/credo`.
+No tag exists without a release. To check a download: `shasum -a 256 -c SHA256SUMS.txt`, or verify
+its provenance with `gh attestation verify Credo-x.y.z.pkg --repo <owner>/credo`.
 
 ## Documentation
 

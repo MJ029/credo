@@ -1,23 +1,64 @@
 name: Release
 
-# Push a version tag (for example v2.2.2) to start a release:
-#   git tag v2.2.2 && git push origin v2.2.2
-# The installers are built on a clean GitHub runner, then the "publish" job WAITS for the
-# repository owner to approve it in the "release" environment before anything is published.
+# Fully automatic after a pull request merges, with one human step:
+#   1. A PR that bumps VERSION in build.sh (and adds a "## x.y.z" changelog section) is merged
+#      into master.
+#   2. This workflow notices that v<VERSION> has no release yet and builds the installers on a
+#      clean GitHub runner.
+#   3. The "publish" job WAITS for the repository owner to approve it in the "release"
+#      environment. Nothing is published, and no tag is created, before that approval.
+#   4. On approval it creates the tag v<VERSION> and the GitHub Release together.
+# Merges that do not change VERSION (docs, CI, refactors) find the tag already exists and stop.
+# "Run workflow" (workflow_dispatch) re-evaluates master, for example after a rejected run.
 on:
   push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Detect new version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      release: ${{ steps.detect.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read VERSION and check whether it is already released
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(grep -m1 '^VERSION=' build.sh | cut -d'"' -f2)"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "::error::build.sh VERSION '$version' is not x.y.z"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" >/dev/null 2>&1; then
+            echo "v$version already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          grep -q "^## $version\$" CHANGELOG.md \
+            || { echo "::error::v$version is new but CHANGELOG.md has no '## $version' section"; exit 1; }
+          echo "v$version is new; building a release."
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build installers
+    needs: version
+    if: needs.version.outputs.release == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     permissions:
@@ -25,36 +66,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
-
-      - name: Check the tag is on master and matches the app version
-        env:
-          TAG: ${{ github.ref_name }}
-        run: |
-          version="${TAG#v}"
-          git fetch --no-tags origin master
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/master \
-            || { echo "::error::$TAG is not on master. Merge the pull request first, then tag master."; exit 1; }
-          build_version="$(grep -m1 '^VERSION=' build.sh | cut -d'"' -f2)"
-          [ "$build_version" = "$version" ] \
-            || { echo "::error::tag is $version but build.sh says $build_version"; exit 1; }
-          grep -q "^## $version\$" CHANGELOG.md \
-            || { echo "::error::CHANGELOG.md has no '## $version' section"; exit 1; }
 
       - name: Build .pkg and .dmg
         run: ./build.sh --no-open
 
       - name: Checksums and release notes
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          version="${TAG#v}"
           mkdir dist
-          mv "Credo-$version.pkg" "Credo-$version.dmg" dist/
-          (cd dist && shasum -a 256 "Credo-$version.pkg" "Credo-$version.dmg" > SHA256SUMS.txt)
+          mv "Credo-$VERSION.pkg" "Credo-$VERSION.dmg" dist/
+          (cd dist && shasum -a 256 "Credo-$VERSION.pkg" "Credo-$VERSION.dmg" > SHA256SUMS.txt)
           # Release notes = this version's section of the changelog, without its heading.
-          awk -v v="$version" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > dist/notes.md
+          awk -v v="$VERSION" '/^## /{p = ($2 == v); next} p' CHANGELOG.md > dist/notes.md
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -65,15 +90,15 @@ jobs:
 
   publish:
     name: Publish release (owner approval)
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # Required reviewer on this environment = nothing is published until the owner approves.
     environment:
       name: release
-      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.version }}
     permissions:
-      contents: write        # create the GitHub Release
+      contents: write        # create the tag and the GitHub Release
       id-token: write        # sign the build provenance
       attestations: write    # store the build provenance
     steps:
@@ -89,13 +114,13 @@ jobs:
             dist/*.pkg
             dist/*.dmg
 
-      - name: Create the GitHub Release
+      - name: Create the tag and the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          version="${TAG#v}"
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "Credo $version" --notes-file dist/notes.md \
-            "dist/Credo-$version.pkg" "dist/Credo-$version.dmg" dist/SHA256SUMS.txt
+          # --target pins the new tag to the exact commit that was built.
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Credo $VERSION" --notes-file dist/notes.md \
+            "dist/Credo-$VERSION.pkg" "dist/Credo-$VERSION.dmg" dist/SHA256SUMS.txt
