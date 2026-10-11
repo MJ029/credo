@@ -5,7 +5,6 @@
 <h1 align="center">Credo</h1>
 
 <p align="center">
-  <b>See your Claude token usage at a glance, in the Mac menu bar and on glass desktop widgets.</b><br>
   Local-first and private: it reads the logs Claude already writes to your Mac. No API key, no analytics.
 </p>
 
