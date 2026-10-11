@@ -159,32 +159,6 @@ sequenceDiagram
     Note over S: On any error Credo falls back to its logs
 ```
 
-### Pull request, CI and release
-
-How a change reaches users. Nothing is published without the owner's approval.
-
-```mermaid
-flowchart LR
-    PR["Pull request<br/>into master"] --> CI
-    subgraph CI["Required checks"]
-        direction TB
-        B["Build · Package"]
-        SL["SwiftLint"]
-        SEC["gitleaks · Semgrep"]
-        WF["actionlint · zizmor"]
-        PD["Personal data guard"]
-        DEP["Dependency review · OSV scan"]
-    end
-    CI --> G{{"CI gate +<br/>Dependency gate"}}
-    G -->|"all pass"| M["Merge to master"]
-    G -->|"any fail"| X["Blocked"]
-    M --> D{"VERSION in build.sh<br/>has no release yet?"}
-    D -->|"no"| N["Stop"]
-    D -->|"yes"| BLD["Build .pkg and .dmg<br/>on a clean runner"]
-    BLD --> AP{{"Owner approves<br/>'release' environment"}}
-    AP --> REL["Attest provenance, create tag<br/>and GitHub Release"]
-```
-
 ## Data flow
 
 ```
