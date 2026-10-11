@@ -5,19 +5,109 @@
 <h1 align="center">Credo</h1>
 
 <p align="center">
-  Claude token usage in your Mac menu bar, plus glass desktop widgets.<br>
-  Private by design: everything is read from logs already on your Mac.
+  <b>See your Claude token usage at a glance, in the Mac menu bar and on glass desktop widgets.</b><br>
+  Local-first and private: it reads the logs Claude already writes to your Mac. No API key, no analytics.
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><b>Download the latest release</b></a> ·
-  <a href="#build-from-source">Build from source</a> ·
-  <a href="docs/HOW-IT-COUNTS.md">How Credo counts</a>
+  <a href="https://github.com/MJ029/credo/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/MJ029/credo?label=release&color=2f6fed"></a>
+  <a href="https://github.com/MJ029/credo/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MJ029/credo/actions/workflows/ci.yml/badge.svg?branch=master"></a>
+  <a href="https://github.com/MJ029/credo/actions/workflows/dependency-security.yml"><img alt="Dependency security" src="https://github.com/MJ029/credo/actions/workflows/dependency-security.yml/badge.svg?branch=master"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/MJ029/credo?color=2f6fed"></a>
+  <img alt="Platform: macOS 13 or later" src="https://img.shields.io/badge/macOS-13%2B-555555">
+  <img alt="Swift, no third-party dependencies" src="https://img.shields.io/badge/Swift-0%20dependencies-F05138">
+  <a href="https://github.com/MJ029/credo/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/MJ029/credo?style=flat&color=2f6fed"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/MJ029/credo/releases/latest"><b>Download</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#what-is-and-isnt-counted">What is counted</a> ·
+  <a href="docs/HOW-IT-COUNTS.md">How Credo counts</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ![Credo's menu bar item, popover and desktop widgets on a macOS desktop](docs/images/hero.png)
 
 > Screenshots use illustrative sample data.
+
+## Introduction
+
+If you use Claude Code or Claude Desktop every day, two questions come up fast: *how much am I
+using?* and *how close am I to the limit?* Claude's own screens answer them only in part, and
+only when you go and look.
+
+Credo is a small macOS menu-bar tool that answers them continuously. It reads the session logs
+Claude Code and Claude Desktop already keep on your Mac, counts each API response exactly once,
+and shows the totals where you can always see them: a number in the menu bar, a popover with
+breakdowns by model, tool and project, and optional desktop widgets. It also prices your usage at
+API list rates, so you can see what a Pro or Max plan is worth to you.
+
+**Who it is for:** anyone who runs Claude Code (terminal, VS Code, JetBrains, the Desktop Code
+tab) or Claude Desktop agent sessions on a Mac and wants honest numbers.
+
+**What makes it different**
+
+- **Private by design.** Reads local files only. By default it makes no network requests and never
+  reads prompt or response text, only token counts and labels.
+- **Counts correctly.** Claude Code repeats a response's token count on every log line, so
+  summing lines inflates usage two to four times. Credo de-duplicates by message ID. See
+  [How Credo counts](docs/HOW-IT-COUNTS.md).
+- **Explicit about its limits.** The [What is and isn't counted](#what-is-and-isnt-counted)
+  section lists every token type it captures and every case it does not, with examples.
+- **Nothing to configure.** Install it and it finds your logs. Add folders or a token budget only
+  if you want to.
+- **Built to be audited.** Pure Swift, no third-party dependencies, about 4,000 lines, and every
+  change passes a security pipeline before it can reach `master`.
+
+## At a glance
+
+| | |
+|---|---|
+| **What it is** | A macOS menu-bar app plus six desktop widgets for Claude token usage |
+| **Reads** | Claude Code and Claude Desktop JSONL session logs, plus any log folder you add |
+| **Shows** | Tokens (input, output, cache write, cache read), API-price cost, cache savings, requests, sessions, 5-hour window, daily chart, model / tool / project breakdowns |
+| **Needs** | macOS 13 Ventura or later, Apple silicon. No API key, no account |
+| **Network** | None by default. Optional **Sync with Claude account** calls `api.anthropic.com` every 3 minutes |
+| **Stack** | Swift 5 / SwiftUI / AppKit, Swift Package, built with the Command Line Tools (no full Xcode) |
+| **Dependencies** | None |
+| **License** | [MIT](LICENSE) |
+
+**Repository snapshot** (v2.2.3, October 2026; the badges above are live)
+
+| | |
+|---|---|
+| Languages | Swift 85%, Python 9%, Shell 5%, HTML 1% |
+| Source size | about 3,900 lines of Swift in two targets (`TokenCore`, `Credo`) |
+| Releases | Installers (`.pkg`, `.dmg`) with `SHA256SUMS.txt` and signed build provenance, published after owner approval |
+| Quality gates | 7 CI checks plus 2 dependency checks, all required on every pull request into `master` |
+| Branch policy | Pull requests only, no force pushes, status checks must pass, conversations resolved |
+| Security | Secret scanning with push protection, Dependabot alerts and updates, pinned and checksum-verified CI tooling |
+
+## Quick start
+
+1. **Download** `Credo-x.y.z.pkg` from the [latest release](https://github.com/MJ029/credo/releases/latest).
+2. **Right-click it → Open**, then click **Open** again (Credo isn't signed with an Apple Developer
+   ID yet, so macOS asks once).
+3. **Finish the installer.** Credo lands in `/Applications` and its number appears in the menu bar.
+
+Click the menu bar number to open the popover. Everything else is optional: widgets, a token
+budget and **Sync with Claude account** live in **Settings**. Full steps, building from source
+and uninstalling are below.
+
+**Contents:**
+[What it does](#what-it-does) ·
+[Install](#install) ·
+[Command line](#command-line) ·
+[Tour](#tour) ·
+[Where the numbers come from](#where-the-numbers-come-from) ·
+[What is and isn't counted](#what-is-and-isnt-counted) ·
+[Privacy](#privacy) ·
+[Uninstall](#uninstall) ·
+[Contributing and CI](#contributing-and-ci) ·
+[Releasing](#releasing) ·
+[Documentation](#documentation)
 
 ## What it does
 
@@ -78,6 +168,19 @@ Quick check without installing:
 ```bash
 build/root/Applications/Credo.app/Contents/MacOS/Credo --report
 ```
+
+## Command line
+
+The app binary doubles as a small command-line tool, handy for scripts and for checking a
+build without opening the interface:
+
+```bash
+/Applications/Credo.app/Contents/MacOS/Credo --report   # print a text summary of your usage and exit
+/Applications/Credo.app/Contents/MacOS/Credo --limits   # ask Claude for your plan limits once (tests Sync)
+```
+
+`--report` reads the same logs and history as the app. `--limits` needs Claude Code to be signed
+in and prints the 5-hour and weekly figures, or the reason Sync can't work.
 
 ## Tour
 
